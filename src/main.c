@@ -14,6 +14,12 @@
 #define DEFAULT_SIZE 5
 #define DEFAULT_GAP 1
 
+// NOTE: workaround for clangd interpreting this file as c++ giving an error on
+// restrict
+#ifdef __cplusplus
+#define restrict __restrict
+#endif
+
 typedef unsigned char byte;
 
 void spots(const char *input_path, const char *output_path, int size, int gap) {
@@ -52,8 +58,8 @@ void spots(const char *input_path, const char *output_path, int size, int gap) {
     }
   }
 
-  byte *in_p = data;
-  byte *out_p = out_data;
+  byte *restrict in_p = data;
+  byte *restrict out_p = out_data;
 
 #pragma omp parallel for collapse(2) schedule(static)
   for (int y = gap; y <= height - size; y += step) {
@@ -76,13 +82,13 @@ void spots(const char *input_path, const char *output_path, int size, int gap) {
       byte avg_g = (byte)(sum_g / npos);
       byte avg_b = (byte)(sum_b / npos);
 
+      uint32_t packed_color = (uint32_t)avg_r | ((uint32_t)avg_g << 8) |
+                              ((uint32_t)avg_b << 16) | (255u << 24);
+
 #pragma clang loop vectorize(enable)
       for (size_t i = 0; i < npos; ++i) {
         size_t p_idx = base_idx + offsets[i];
-        out_p[p_idx] = avg_r;
-        out_p[p_idx + 1] = avg_g;
-        out_p[p_idx + 2] = avg_b;
-        out_p[p_idx + 3] = 255;
+        *(uint32_t *)(&out_p[p_idx]) = packed_color;
       }
     }
   }
